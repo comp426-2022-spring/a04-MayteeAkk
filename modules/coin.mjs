@@ -115,4 +115,4 @@ function flipACoin(call) {
  * 
  * Export all of your named functions
 */
-module.exports = {coinFlip, coinFlips, countFlips, flipACoin};
+export {coinFlip, coinFlips, countFlips, flipACoin};
