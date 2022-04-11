@@ -24,6 +24,5 @@
     "minimist": "^1.2.6",
     "morgan": "^1.10.0",
     "nodemon": "^2.0.15"
-  },
-  "type": "module"
+  }
 }
