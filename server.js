@@ -17,6 +17,10 @@ const debug = args['debug'] || false
 
 const log = args['log'] || true
 
+const logdb = require('./database.js')
+app.use(express.urlencoded({ extended: true}));
+app.use(express.json());
+
 const fs = require('fs')
 const morgan = require('morgan')
 
@@ -25,106 +29,120 @@ const server = app.listen(port, () => {
 });
 
 
-if (args['help']) {
-    console.log(`server.js [options]
-    --port	Set the port number for the server to listen on. Must be an integer
-                between 1 and 65535.
-  
-    --debug	If set to 'true', creates endlpoints /app/log/access/ which returns
-                a JSON access log from the database and /app/error which throws 
-                an error with the message "Error test successful." Defaults to 
-                'false'.
-  
-    --log		If set to false, no log files are written. Defaults to true.
-                Logs are always written to database.
-  
-    --help	Return this message and exit.
-    `);
-    process.exit(0);
+const help = (`
+server.js [options]
+--port	Set the port number for the server to listen on. Must be an integer
+            between 1 and 65535.
+--debug	If set to true, creates endlpoints /app/log/access/ which returns
+            a JSON access log from the database and /app/error which throws 
+            an error with the message "Error test successful." Defaults to 
+            false.
+--log		If set to false, no log files are written. Defaults to true.
+            Logs are always written to database.
+--help	Return this message and exit.
+`)
+
+if(args.help || args.h) {
+    console.log(help)
+    process.exit(0)
 }
 
-app.use( (req, res, next) => {
+if(args.log != false) {
+    const accesslog = fs.createWriteStream('access.log', { flags: 'a'})
+    app.use(morgan('combined', {stream: accesslog}))
+}
+
+app.use((req, res, next) => {
     let logdata = {
-        remoteaddr: req.ip,
-        remoteuser: req.user,
-        time: Date.now(),
-        method: req.method,
-        url: req.url,
-        protocol: req.protocol,
-        httpversion: req.httpVersion,
-        secure: req.secure,
-        status: res.statusCode,
-        referer: req.headers['referer'],
-        useragent: req.headers['user-agent']
-    };
-    const stmt = db.prepare(`
-        INSERT INTO accesslog (remoteaddr,
-        remoteuser,
-        time,
-        method,
-        url,
-        protocol,
-        httpversion,
-        secure,
-        status,
-        referer,
-        useragent) values (?,?,?,?,?,?,?,?,?,?,?);
-    `);
-    const info = stmt.run(logdata.remoteaddr, logdata.remoteuser, logdata.time,logdata.method,
-        logdata.url,logdata.protocol,logdata.httpversion,logdata.secure,logdata.status,logdata.referer,logdata.useragent);
-    res.status(200).json(info);
-    next();
+    remoteaddr: req.ip,
+    remoteuser: req.user,
+    time: Date.now(),
+    method: req.method,
+    url: req.url,
+    protocol: req.protocol,
+    httpversion: req.httpVersion,
+    status: res.statusCode,
+    referer: req.headers['referer'],
+    useragent: req.headers['user-agent']
+    }
+
+    const stmt = logdb.prepare('INSERT INTO accesslog (remoteaddr, remoteuser, time, method, url, protocol, httpversion, status, referer, useragent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    const info = stmt.run(logdata.remoteaddr, logdata.remoteuser, logdata.time, logdata.method, logdata.url, logdata.protocol, logdata.httpversion, logdata.status, logdata.referer, logdata.useragent)
+    
+    next()
 })
 
-if (debug) {
-    app.get('/app/log/access', (req, res) => {
-        try {
-            const stmt = db.prepare(`SELECT * FROM accesslog`).all();
-            res.status(200).json(stmt);
-        } catch {
-            console.error(e);
-        }
-    });
+if(args.debug) {
+    app.get('app/log/access', (req, res) => {
+        const stmt = logdb.prepare('SELECT * FROM accesslog').all()
+        res.status(200).json(stmt)
+    })
     app.get('/app/error', (req, res) => {
-        throw new Error('Error test successful.');
-    });
+    throw new Error("Error test successful")
+    })
 }
 
-if (log) {
-    const writestream = fs.createWriteStream('./access.log', {flags: 'a'})
-    app.use(morgan('combined',{stream:writestream}))
-}
-
-app.get('/app', (req, res) => {
-    res.status(200).end("OK");
-    res.type("text/plain");
+//2202-03-08 comp 426
+//CREATE a new user (HTTP method post) at endpoint /app/new/
+app.post('/app/new/user', (req, res, next) => {
+    let data = {
+    user: req.body.username,
+    pass: req.body.password
+    }
+    const stmt = logdb.prepare('INSERT INTO userinfo (username, password) VALUES (?, ?)')
+    const info = stmt.run(data.user, data.pass)
+    res.status(200).json(info)
 })
 
-app.get('/app/echo/:number', (req, res) => {
-    res.status(200).json({ "message": req.params.number });
+// Read a list of users (HTTP method GET) 
+app.get('/app/users', (req, res) => {
+    try {
+      const stmt = logdb.prepare('SELECT * FROM userinfo').all()
+      res.status(200).json(stmt)
+    } catch (e) {
+      console.error(e)
+    }
 })
 
-//Defining Check Endpoint
-app.get('/app/flip', (req, res) => {
-    let flip = coinFlip();
-    res.status(200).json({ "flip": flip })
+// Read a single user (HTTP method GET)
+app.get('/app/user/:id', (req, res) => {
+  try {
+      const stmt = logdb.prepare('SELECT * FROM userinfo WHERE id = ?').get(req.params.id)
+      res.status(200).json(stmt)
+  } catch (e) {
+      console.error(e)
+  }
+})
+// update a single user (HTTP method Patch)
+app.patch('/app/update/user/:id', (req, res) => {
+  let data = {
+    user: req.body.username,
+    pass: req.body.password
+  }
+  const stmt = logdb.prepare('UPDATE userinfo SET username = COALESCE(?,username), password = COALESCE(?, password) WHERE id = ?')
+  const info = stmt.run(data.user, data.pass, req.params.id)
+  res.status(200).json(info)
 })
 
-app.get('/app/flips/:number', (req, res) => {
-    const result = coinFlips(parseInt(req.params.number))
-    const count = countFlips(result)
-    res.status(200).json({"raw": result, "summary": count})
+//delete a single user (HTTP method delete)
+app.delete('/app/delete/user/:id', (req, res) => {
+    const stmt = logdb.prepare('DELETE FROM userinfo WHERE id = ?')
+    const info = stmt.run(req.params.id)
+    res.status(200).json()
 })
 
-app.get('/app/flip/call/:call', (req, res) => {
-    res.status(200).json(flipACoin(req.params.call))
+//Define base endpoint
+app.get('/app/', (req, res) => {
+    res.statusCode=200 //respond with status 200
+    res.statusMessage='OK' //respond with status message "OK"
+    res.writeHead(res.statusCode, {'Content-Type' : 'text/plain'})
+    res.end(res.statusCode + ' ' + res.statusMessage)
 })
 
-//Default Reponse for Any Other Request
-app.use(function(req, res) {
-    res.status(404).end("Endpoint does not exist");
-    res.type("text/plain");
-});
+// unless specified :varaible will be anyinput
+app.get('/app/echo/:number',  (req, res) => {
+    res.status(200).json({ 'message': req.params.number})
+})
 
 
 
