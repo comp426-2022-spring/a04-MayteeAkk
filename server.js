@@ -1,5 +1,5 @@
 //Import Functions
-const { coinFlip, coinFlips, countFlips, flipACoin } = require('./modules/coin.mjs');
+import { coinFlip, coinFlips, countFlips, flipACoin } from "./modules/coin.mjs";
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
