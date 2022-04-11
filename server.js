@@ -17,7 +17,7 @@ const debug = args['debug'] || false
 
 const log = args['log'] || true
 
-const logdb = require('./database.js')
+
 app.use(express.urlencoded({ extended: true}));
 app.use(express.json());
 
