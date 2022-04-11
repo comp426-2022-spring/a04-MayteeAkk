@@ -1,33 +1,27 @@
-//Import Functions
-import { coinFlip, coinFlips, countFlips, flipACoin } from "./modules/coin.mjs";
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-
+// require Express.js
 const express = require('express')
 const app = express()
 
-const db = require("./database.cjs")
+// require morgan
+const morgan = require('morgan')
 
-const args = require('minimist')(process.argv.slice(2))
+// require fs
+const fs = require('fs')
 
-const port = args['port'] || 5555
-
-const debug = args['debug'] || false
-
-const log = args['log'] || true
-
+// require database script file
+const logdb = require('./database.js')
 
 app.use(express.urlencoded({ extended: true}));
 app.use(express.json());
 
-const fs = require('fs')
-const morgan = require('morgan')
+const args = require('minimist')(process.argv.slice(2))
 
+const port = args.port || process.env.PORT || 5555
+
+// start app server
 const server = app.listen(port, () => {
-    console.log('App listening on port %PORT%'.replace('%PORT%',port))
-});
-
+    console.log('App listening on port %PORT%'.replace('%PORT%', port))
+})
 
 const help = (`
 server.js [options]
